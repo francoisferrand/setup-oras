@@ -32,10 +32,7 @@ async function download(version: string, url: string, checksum: string): Promise
 
   // extract the tarball/zipball onto host runner
   const extract = download_url.endsWith('.zip') ? tc.extractZip : tc.extractTar;
-  const pathToCLI: string = await extract(pathToTarball);
-
-  // add to the tool's cache
-  return tc.cacheDir(pathToCLI, 'oras', version);
+  return extract(pathToTarball);
 }
 
 // setup sets up the ORAS CLI
@@ -45,9 +42,20 @@ async function setup(): Promise<void> {
     const version: string = core.getInput('version');
     const url: string = core.getInput('url');
     const checksum = core.getInput('checksum').toLowerCase();
+    const cache = core.getBooleanInput('cache');
 
-    // get version from path, otherwise download it
-    const pathToCLI = tc.find('oras', version) || await download(version, url, checksum);
+    // try to get version from cache
+    let pathToCLI = cache ? tc.find('oras', version) : '';
+
+    // download version if needed
+    if (!pathToCLI) {
+      pathToCLI = await download(version, url, checksum);
+    }
+
+    // add to the tool's cache, if enabled
+    if (cache) {
+      pathToCLI = await tc.cacheDir(pathToCLI, 'oras', version);
+    }
 
     // add `ORAS` to PATH
     core.addPath(pathToCLI);

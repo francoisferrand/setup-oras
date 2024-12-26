@@ -27,6 +27,10 @@ inputs:
   checksum:
     description: SHA256 of the customized ORAS CLI. Required if 'url' is present.
     required: false
+  cache:
+    description: Used to specify whether caching is needed. Set to true, if you'd like to enable caching.
+    required: false
+    default: true
 runs:
   using: node20
   main: dist/index.js
