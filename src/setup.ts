@@ -16,6 +16,28 @@ import * as tc from '@actions/tool-cache';
 import { getReleaseInfo } from './lib/release';
 import { hash } from './lib/checksum';
 
+// download ORAS CLI
+async function download(version: string, url: string, checksum: string): Promise<string> {
+  // download ORAS CLI and validate checksum
+  const info = getReleaseInfo(version, url, checksum);
+  const download_url = info.url;
+  console.log(`downloading ORAS CLI from ${download_url}`);
+  const pathToTarball: string = await tc.downloadTool(download_url);
+  console.log("downloading ORAS CLI completed");
+  const actual_checksum = await hash(pathToTarball);
+  if (actual_checksum !== info.checksum) {
+    throw new Error(`checksum of downloaded ORAS CLI ${actual_checksum} does not match expected checksum ${info.checksum}`);
+  }
+  console.log("successfully verified downloaded release checksum");
+
+  // extract the tarball/zipball onto host runner
+  const extract = download_url.endsWith('.zip') ? tc.extractZip : tc.extractTar;
+  const pathToCLI: string = await extract(pathToTarball);
+
+  // add to the tool's cache
+  return tc.cacheDir(pathToCLI, 'oras', version);
+}
+
 // setup sets up the ORAS CLI
 async function setup(): Promise<void> {
   try {
@@ -24,21 +46,8 @@ async function setup(): Promise<void> {
     const url: string = core.getInput('url');
     const checksum = core.getInput('checksum').toLowerCase();
 
-    // download ORAS CLI and validate checksum
-    const info = getReleaseInfo(version, url, checksum);
-    const download_url = info.url;
-    console.log(`downloading ORAS CLI from ${download_url}`);
-    const pathToTarball: string = await tc.downloadTool(download_url);
-    console.log("downloading ORAS CLI completed");
-    const actual_checksum = await hash(pathToTarball);
-    if (actual_checksum !== info.checksum) {
-      throw new Error(`checksum of downloaded ORAS CLI ${actual_checksum} does not match expected checksum ${info.checksum}`);
-    }
-    console.log("successfully verified downloaded release checksum");
-
-    // extract the tarball/zipball onto host runner
-    const extract = download_url.endsWith('.zip') ? tc.extractZip : tc.extractTar;
-    const pathToCLI: string = await extract(pathToTarball);
+    // get version from path, otherwise download it
+    const pathToCLI = tc.find('oras', version) || await download(version, url, checksum);
 
     // add `ORAS` to PATH
     core.addPath(pathToCLI);
